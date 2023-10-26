@@ -1,0 +1,152 @@
+name: Build App
+
+on:
+  schedule:
+    - cron: 16 8 * * *
+  push:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  FORCE_COLOR: "1"
+
+jobs:
+  build:
+    name: App Build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [ aarch64, armv7, armv6 ]
+    steps:
+      - name: Checkout beeware/briefcase-linux-system-template
+        uses: actions/checkout@v3
+        with:
+          repository: beeware/briefcase-linux-system-template
+          path: linux-system
+          fetch-depth: 0
+
+      - name: Build Linux System (${{ matrix.arch }})
+        uses: uraimo/run-on-arch-action@v2
+        with:
+          arch: ${{ matrix.arch }}
+          distro: bullseye
+          githubToken: ${{ github.token }}
+          dockerRunArgs: |
+            --workdir="/repo/tests/apps/verify-toga"
+            --volume="${{ github.workspace }}/linux-system:/repo"
+          shell: /bin/bash
+          env: |
+            PIP_ROOT_USER_ACTION: ignore
+            PIP_NO_WARN_SCRIPT_LOCATION: 0
+            PIP_BREAK_SYSTEM_PACKAGES: 1
+          install: |
+            apt update && apt install -y git gcc python3-dev python3-pip libcairo2-dev libgirepository1.0-dev
+          run: |
+            # the image runs with a TTY so fake out no TTY to clean up the output logs
+            set -x
+
+            python3 -m pip -q install -U pip setuptools wheel
+            python3 -m pip -q install git+https://github.com/beeware/briefcase
+
+            briefcase create linux system | cat
+            briefcase build linux system | cat
+            briefcase package linux system | cat
+
+      - name: Checkout beeware/briefcase-web-static-template
+        uses: actions/checkout@v3
+        with:
+          repository: beeware/briefcase-web-static-template
+          path: web-static
+          fetch-depth: 0
+
+      - name: Build Web Static (${{ matrix.arch }})
+        uses: uraimo/run-on-arch-action@v2
+        with:
+          arch: ${{ matrix.arch }}
+          distro: bullseye
+          githubToken: ${{ github.token }}
+          dockerRunArgs: |
+            --workdir="/repo/tests/apps/verify-toga"
+            --volume="${{ github.workspace }}/web-static:/repo"
+          shell: /bin/bash
+          env: |
+            PIP_ROOT_USER_ACTION: ignore
+            PIP_NO_WARN_SCRIPT_LOCATION: 0
+            PIP_BREAK_SYSTEM_PACKAGES: 1
+          install: |
+            apt update && apt install -y git python3-dev python3-pip
+          run: |
+            # the image runs with a TTY so fake out no TTY to clean up the output logs
+            set -x
+
+            python3 -m pip -q install -U pip setuptools wheel
+            python3 -m pip -q install git+https://github.com/beeware/briefcase
+
+            briefcase create web static | cat
+            briefcase build web static | cat
+            briefcase package web static | cat
+
+      - name: Send mail
+        if: failure() && github.event_name != 'pull_request'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: ${{ github.job }} job of ${{ github.repository }} failed
+          body: |
+            ${{ github.job }} job in workflow ${{ github.workflow }} of ${{ github.repository }} failed.
+            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          to: ${{ secrets.EMAIL_ADDRESS }}  # comma-separated string
+          from: ${{ secrets.EMAIL_USERNAME }}
+
+  build-self-hosted:
+    name: App Build (aarch64 self-hosted)
+    runs-on: [self-hosted, linux, ARM64]
+    steps:
+      - name: Checkout beeware/briefcase-linux-flatpak-template
+        uses: actions/checkout@v3
+        with:
+          repository: beeware/briefcase-linux-flatpak-template
+          path: linux-flatpak
+          fetch-depth: 0
+
+      - name: Build Linux Flatpak App
+        run: |
+          sudo apt-get install -y flatpak flatpak-builder python3-venv python3-dev
+
+          python3 -m venv venv && source venv/bin/activate
+          python -m pip install -U pip setuptools wheel
+          python -m pip install git+https://github.com/beeware/briefcase
+
+          cd linux-flatpak/tests/apps/verify-toga
+          briefcase create linux flatpak
+          briefcase build linux flatpak
+          briefcase package linux flatpak --adhoc-sign
+
+      - name: Send mail
+        if: failure() && github.event_name != 'pull_request'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: ${{ github.job }} job of ${{ github.repository }} failed
+          body: |
+            ${{ github.job }} job in workflow ${{ github.workflow }} of ${{ github.repository }} failed.
+            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          to: ${{ secrets.EMAIL_ADDRESS }}  # comma-separated string
+          from: ${{ secrets.EMAIL_USERNAME }}
