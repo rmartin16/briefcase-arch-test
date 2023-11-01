@@ -15,7 +15,7 @@ defaults:
     shell: bash
 
 env:
-  FORCE_COLOR: "1"
+  FORCE_COLOR: 1
 
 jobs:
   build:
@@ -46,18 +46,15 @@ jobs:
             --workdir="/repo/tests/apps/verify-toga"
             --volume="${{ github.workspace }}/linux-system:/repo"
           shell: /bin/bash
-          env: |
-            PIP_ROOT_USER_ACTION: ignore
-            PIP_NO_WARN_SCRIPT_LOCATION: 0
-            PIP_BREAK_SYSTEM_PACKAGES: 1
           install: |
-            apt update && apt install -y git gcc python3-dev python3-pip libcairo2-dev libgirepository1.0-dev
+            apt update && apt install -y --no-install-recommends git gcc python3-dev python3-pip python3-venv libcairo2-dev libgirepository1.0-dev
           run: |
             # the image runs with a TTY so fake out no TTY to clean up the output logs
             set -x
 
+            rm -rf venv && python3 -m venv venv && source venv/bin/activate
             python3 -m pip -q install -U pip setuptools wheel
-            python3 -m pip -q install git+https://github.com/beeware/briefcase
+            python3 -m pip -q install --upgrade-strategy eager -U git+https://github.com/beeware/briefcase
 
             briefcase create linux system | cat
             briefcase build linux system | cat
@@ -80,42 +77,35 @@ jobs:
             --workdir="/repo/tests/apps/verify-toga"
             --volume="${{ github.workspace }}/web-static:/repo"
           shell: /bin/bash
-          env: |
-            PIP_ROOT_USER_ACTION: ignore
-            PIP_NO_WARN_SCRIPT_LOCATION: 0
-            PIP_BREAK_SYSTEM_PACKAGES: 1
           install: |
-            apt update && apt install -y git python3-dev python3-pip
+            apt update && apt install -y --no-install-recommends git gcc python3-dev python3-pip python3-venv
           run: |
             # the image runs with a TTY so fake out no TTY to clean up the output logs
             set -x
 
+            rm -rf venv && python3 -m venv venv && source venv/bin/activate
             python3 -m pip -q install -U pip setuptools wheel
-            python3 -m pip -q install git+https://github.com/beeware/briefcase
+            python3 -m pip -q install --upgrade-strategy eager -U git+https://github.com/beeware/briefcase
 
             briefcase create web static | cat
             briefcase build web static | cat
             briefcase package web static | cat
 
-      - name: Send mail
-        if: failure() && github.event_name != 'pull_request'
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: smtp.gmail.com
-          server_port: 587
-          username: ${{ secrets.EMAIL_USERNAME }}
-          password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: ${{ github.job }} job of ${{ github.repository }} failed
-          body: |
-            ${{ github.job }} job in workflow ${{ github.workflow }} of ${{ github.repository }} failed.
-            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          to: ${{ secrets.EMAIL_ADDRESS }}  # comma-separated string
-          from: ${{ secrets.EMAIL_USERNAME }}
-
   build-self-hosted:
     name: App Build (aarch64 self-hosted)
     runs-on: [self-hosted, linux, ARM64]
+    env:
+      PIP_CACHE_DIR: /runner/pip.cache
+      JAVA_HOME: /runner/java17
+      ANDROID_HOME: /runner/android_sdk
+      BRIEFCASE_HOME: /runner/briefcase
     steps:
+      # these are currently already exist in the docker image
+      #- name: Install Prerequisites
+      #  run: |
+      #    sudo apt update
+      #    sudo apt install -y --no-install-recommends python3-dev python3-venv
+
       - name: Checkout beeware/briefcase-linux-flatpak-template
         uses: actions/checkout@v3
         with:
@@ -123,30 +113,64 @@ jobs:
           path: linux-flatpak
           fetch-depth: 0
 
+      - name: Checkout beeware/briefcase-android-gradle-template
+        uses: actions/checkout@v3
+        with:
+          repository: beeware/briefcase-android-gradle-template
+          path: android-gradle
+          fetch-depth: 0
+
+      - name: Build Linux System App (RPM, Docker)
+        run: |
+          # use the bind mount so docker-in-docker works
+          cd /runner/work/briefcase-arch-test/briefcase-arch-test/
+
+          rm -rf venv && python3 -m venv venv && source venv/bin/activate
+          realpath venv
+          python -m pip install -U pip setuptools wheel
+          python -m pip install --upgrade-strategy eager -U git+https://github.com/beeware/briefcase
+
+          rm -rf linux-system
+          git clone https://github.com/beeware/briefcase-linux-system-template linux-system
+
+          cd linux-system/tests/apps/verify-toga
+          briefcase create linux system --target fedora:38
+          briefcase build linux system --target fedora:38
+          briefcase package linux system --target fedora:38 --adhoc-sign
+
       - name: Build Linux Flatpak App
         run: |
-          sudo apt-get install -y flatpak flatpak-builder python3-venv python3-dev
+          #sudo apt install -y --no-install-recommends elfutils flatpak flatpak-builder
 
-          python3 -m venv venv && source venv/bin/activate
+          rm -rf venv && python3 -m venv venv && source venv/bin/activate
           python -m pip install -U pip setuptools wheel
-          python -m pip install git+https://github.com/beeware/briefcase
+          python -m pip install --upgrade-strategy eager -U git+https://github.com/beeware/briefcase
 
           cd linux-flatpak/tests/apps/verify-toga
           briefcase create linux flatpak
           briefcase build linux flatpak
           briefcase package linux flatpak --adhoc-sign
 
-      - name: Send mail
-        if: failure() && github.event_name != 'pull_request'
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: smtp.gmail.com
-          server_port: 587
-          username: ${{ secrets.EMAIL_USERNAME }}
-          password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: ${{ github.job }} job of ${{ github.repository }} failed
-          body: |
-            ${{ github.job }} job in workflow ${{ github.workflow }} of ${{ github.repository }} failed.
-            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          to: ${{ secrets.EMAIL_ADDRESS }}  # comma-separated string
-          from: ${{ secrets.EMAIL_USERNAME }}
+      - name: Install Android SDK
+        run: |
+          set -x
+          mkdir -p "$ANDROID_HOME"
+          git config --global --add safe.directory "$ANDROID_HOME"
+          if [ -z "$(ls -A $ANDROID_HOME/.git)" ]; then
+            rm -rf "$ANDROID_HOME"
+            git clone https://github.com/rmartin16/briefcase-android-sdk-aarch64.git "$ANDROID_HOME"
+          fi
+          cd "$ANDROID_HOME"
+          git pull origin main
+
+      - name: Build Android App
+        run: |
+          rm -rf venv && python3 -m venv venv && source venv/bin/activate
+          python -m pip install -U pip setuptools wheel
+          python -m pip install --upgrade-strategy eager -U git+https://github.com/beeware/briefcase
+
+          cd android-gradle/tests/apps/verify-toga
+          briefcase create android
+          echo "android.aapt2FromMavenOverride=$ANDROID_HOME/build-tools/aapt2" >> ./build/verify-toga/android/gradle/gradle.properties
+          briefcase build android
+          briefcase package android
