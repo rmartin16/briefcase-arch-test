@@ -19,8 +19,9 @@ env:
   APP_NAME: Verify App
   APP_DIR: verifyapp
   GUI_INPUT: 1
+  VENV_DIR: /runner/work/briefcase-arch-test/briefcase-arch-test/venv
   SETUP_VENV: >
-    rm -rf venv && python3 -m venv venv && source venv/bin/activate &&
+    rm -rf "$VENV_DIR" && python3 -m venv "$VENV_DIR" && source "$VENV_DIR/bin/activate" &&
     python -m pip -q install --upgrade pip setuptools wheel &&
     python -m pip -q install --upgrade --upgrade-strategy eager git+https://github.com/beeware/briefcase
   PRINT_INPUTS: printf "%s\n%s\n\n\n\n\n\n\n\n%s\n" "$APP_NAME" "$APP_DIR" "$GUI_INPUT"
@@ -50,6 +51,7 @@ jobs:
             APP_NAME: ${{ env.APP_NAME }}
             APP_DIR: ${{ env.APP_DIR }}
             GUI_INPUT: ${{ env.GUI_INPUT }}
+            VENV_DIR: ${{ env.VENV_DIR }}
             SETUP_VENV: ${{ env.SETUP_VENV }}
             PRINT_INPUTS: ${{ env.PRINT_INPUTS }}
             CREATE_PROJECT: ${{ env.CREATE_PROJECT }}
@@ -67,6 +69,9 @@ jobs:
             briefcase build linux system | cat
             briefcase package linux system | cat
 
+            rm -rf build
+            briefcase package linux system | cat
+
       - name: Build Web Static (${{ matrix.arch }})
         uses: uraimo/run-on-arch-action@v2
         with:
@@ -78,6 +83,7 @@ jobs:
             APP_NAME: ${{ env.APP_NAME }}
             APP_DIR: ${{ env.APP_DIR }}
             GUI_INPUT: ${{ env.GUI_INPUT }}
+            VENV_DIR: ${{ env.VENV_DIR }}
             SETUP_VENV: ${{ env.SETUP_VENV }}
             PRINT_INPUTS: ${{ env.PRINT_INPUTS }}
             CREATE_PROJECT: ${{ env.CREATE_PROJECT }}
@@ -92,6 +98,9 @@ jobs:
 
             briefcase create web static | cat
             briefcase build web static | cat
+            briefcase package web static | cat
+
+            rm -rf build
             briefcase package web static | cat
 
   build-self-hosted:
@@ -118,11 +127,14 @@ jobs:
         run: |
           set -x && echo $(pwd)
 
-          source venv/bin/activate
+          source $VENV_DIR/bin/activate
           eval $CREATE_PROJECT
 
           briefcase create linux system --target fedora:39
           briefcase build linux system --target fedora:39
+          briefcase package linux system --target fedora:39
+
+          rm -rf build
           briefcase package linux system --target fedora:39
 
       - name: Install Android SDK
@@ -141,7 +153,7 @@ jobs:
         run: |
           set -x && echo $(pwd)
 
-          source venv/bin/activate
+          source $VENV_DIR/bin/activate
           eval $CREATE_PROJECT
 
           briefcase create android
@@ -150,16 +162,39 @@ jobs:
           briefcase build android
           briefcase package android
 
-      - name: Build Linux Flatpak App
+          rm -rf android
+          briefcase package android
+
+      - name: Build AppImage
+        # use the bind mount so docker-in-docker works
+        working-directory: /runner/work/briefcase-arch-test/briefcase-arch-test/
+        run: |
+          set -x && echo $(pwd)
+
+          source $VENV_DIR/bin/activate
+          eval $CREATE_PROJECT
+
+          briefcase create linux appimage --config 'requires=["toga-gtk==0.3.1","PyGobject<3.46.0"]'
+          briefcase build linux appimage
+          briefcase package linux appimage
+
+          rm -rf build
+          briefcase package linux appimage --config 'requires=["toga-gtk==0.3.1","PyGobject<3.46.0"]'
+
+
+      - name: Build Flatpak
         run: |
           set -x && echo $(pwd)
 
           sudo apt -y update
           sudo apt -y install --no-install-recommends elfutils flatpak flatpak-builder
 
-          source venv/bin/activate
+          source $VENV_DIR/bin/activate
           eval $CREATE_PROJECT
 
           briefcase create linux flatpak
           briefcase build linux flatpak
+          briefcase package linux flatpak
+
+          rm -rf build
           briefcase package linux flatpak
