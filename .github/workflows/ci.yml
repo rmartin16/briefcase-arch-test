@@ -18,12 +18,14 @@ env:
   FORCE_COLOR: 1
   APP_NAME: Verify App
   APP_DIR: verifyapp
-  GUI_INPUT: 1
+  GUI_INPUT: 8
   VENV_DIR: /runner/work/briefcase-arch-test/briefcase-arch-test/venv
   SETUP_VENV: >
     rm -rf "$VENV_DIR" && python3 -m venv "$VENV_DIR" && source "$VENV_DIR/bin/activate" &&
     python -m pip -q install --upgrade pip setuptools wheel &&
-    python -m pip -q install --upgrade --upgrade-strategy eager git+https://github.com/beeware/briefcase
+    python -m pip -q install --upgrade --upgrade-strategy eager
+      git+https://github.com/beeware/briefcase
+      git+https://github.com/beeware/briefcase#subdirectory=automation
   PRINT_INPUTS: printf "%s\n%s\n\n\n\n\n\n\n\n%s\n" "$APP_NAME" "$APP_DIR" "$GUI_INPUT"
   CREATE_PROJECT: rm -rf "$APP_DIR" && eval $PRINT_INPUTS | briefcase new && cd "$APP_DIR"
 
@@ -171,16 +173,18 @@ jobs:
         run: |
           set -x && echo $(pwd)
 
+          sudo apt install -y libfuse2 xvfb libthai-dev libfribidi0 libfontconfig1 libx11-6 libegl1 libgl1 libharfbuzz0b
+
           source $VENV_DIR/bin/activate
           eval $CREATE_PROJECT
 
-          briefcase create linux appimage --config 'requires=["toga-gtk==0.3.1","PyGobject<3.46.0"]'
+          briefcase create linux appimage --config 'requires=["toga-gtk<0.4.0","PyGobject<3.46.0"]'
           briefcase build linux appimage
+          xvfb-run briefcase run linux AppImage
           briefcase package linux appimage
 
           rm -rf build
-          briefcase package linux appimage --config 'requires=["toga-gtk==0.3.1","PyGobject<3.46.0"]'
-
+          briefcase package linux appimage --config 'requires=["toga-gtk<0.4.0","PyGobject<3.46.0"]'
 
       - name: Build Flatpak
         run: |
@@ -194,7 +198,10 @@ jobs:
 
           briefcase create linux flatpak
           briefcase build linux flatpak
+          # Flatpak errors when run
+          #xvfb-run briefcase run linux flatpak
           briefcase package linux flatpak
 
-          rm -rf build
-          briefcase package linux flatpak
+          # the Flatpak build cannot be deleted due to "rofiles"
+          #rm -rf build
+          #briefcase package linux flatpak
