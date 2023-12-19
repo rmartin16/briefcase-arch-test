@@ -28,6 +28,7 @@ env:
       git+https://github.com/beeware/briefcase#subdirectory=automation
   PRINT_INPUTS: printf "%s\n%s\n\n\n\n\n\n\n\n%s\n" "$APP_NAME" "$APP_DIR" "$GUI_INPUT"
   CREATE_PROJECT: rm -rf "$APP_DIR" && eval $PRINT_INPUTS | briefcase new && cd "$APP_DIR"
+  SUPPORT_PACKAGE_LOC: https://github.com/rmartin16/python-standalone-releases/releases/download/continuous
 
 jobs:
   build:
@@ -40,6 +41,12 @@ jobs:
       fail-fast: false
       matrix:
         arch: [ aarch64, armv7, armv6 ]
+        include:
+          - support-package-url: ""
+          - arch: aarch64
+            support-package-abi: aarch64-unknown-linux-gnu
+          - arch: armv7
+            support-package-abi: armv7-unknown-linux-gnueabihf
     steps:
 
       - name: Build Linux System (${{ matrix.arch }})
@@ -50,6 +57,8 @@ jobs:
           githubToken: ${{ github.token }}
           shell: /bin/bash
           env: |
+            TERM: dumb
+            FORCE_COLOR: 1
             APP_NAME: ${{ env.APP_NAME }}
             APP_DIR: ${{ env.APP_DIR }}
             GUI_INPUT: ${{ env.GUI_INPUT }}
@@ -67,12 +76,48 @@ jobs:
             eval $SETUP_VENV
             eval $CREATE_PROJECT
 
-            briefcase create linux system | cat
-            briefcase build linux system | cat
-            briefcase package linux system | cat
+            briefcase create linux system
+            briefcase build linux system
+            briefcase package linux system
 
             rm -rf build
-            briefcase package linux system | cat
+            briefcase package linux system
+
+      - name: Build AppImage (${{ matrix.arch }})
+        if: matrix.arch != 'armv6'
+        uses: uraimo/run-on-arch-action@v2
+        with:
+          arch: ${{ matrix.arch }}
+          distro: bullseye
+          githubToken: ${{ github.token }}
+          shell: /bin/bash
+          env: |
+            TERM: dumb
+            FORCE_COLOR: 1
+            APP_NAME: ${{ env.APP_NAME }}
+            APP_DIR: ${{ env.APP_DIR }}
+            GUI_INPUT: ${{ env.GUI_INPUT }}
+            VENV_DIR: ${{ env.VENV_DIR }}
+            SETUP_VENV: ${{ env.SETUP_VENV }}
+            PRINT_INPUTS: ${{ env.PRINT_INPUTS }}
+            CREATE_PROJECT: ${{ env.CREATE_PROJECT }}
+            SUPPORT_PACKAGE_URL: ${{ env.SUPPORT_PACKAGE_LOC }}/cpython-3.9-${{ matrix.support-package-abi }}-noopt.tar.gz
+          install: |
+            apt -y update
+            apt -y install --no-install-recommends git gcc python3-dev python3-pip python3-venv \
+              libfuse2 libcairo2-dev libgirepository1.0-dev gir1.2-gtk-3.0 file
+          run: |
+            set -x && echo $(pwd)
+
+            eval $SETUP_VENV
+            eval $CREATE_PROJECT
+
+            briefcase create linux appimage --no-docker --config "support_package=\"${SUPPORT_PACKAGE_URL}\""
+            briefcase build linux appimage --no-docker
+            briefcase package linux appimage --no-docker
+
+            rm -rf build
+            briefcase package linux appimage --no-docker --config "support_package=\"${SUPPORT_PACKAGE_URL}\""
 
       - name: Build Web Static (${{ matrix.arch }})
         uses: uraimo/run-on-arch-action@v2
@@ -82,6 +127,8 @@ jobs:
           githubToken: ${{ github.token }}
           shell: /bin/bash
           env: |
+            TERM: dumb
+            FORCE_COLOR: 1
             APP_NAME: ${{ env.APP_NAME }}
             APP_DIR: ${{ env.APP_DIR }}
             GUI_INPUT: ${{ env.GUI_INPUT }}
@@ -98,12 +145,12 @@ jobs:
             eval $SETUP_VENV
             eval $CREATE_PROJECT
 
-            briefcase create web static | cat
-            briefcase build web static | cat
-            briefcase package web static | cat
+            briefcase create web static
+            briefcase build web static
+            briefcase package web static
 
             rm -rf build
-            briefcase package web static | cat
+            briefcase package web static
 
   build-self-hosted:
     name: App Build (aarch64 self-hosted)
