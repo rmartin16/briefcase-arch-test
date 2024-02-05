@@ -220,7 +220,8 @@ jobs:
         run: |
           set -x && echo $(pwd)
 
-          sudo apt install -y libfuse2 xvfb libthai-dev libfribidi0 libfontconfig1 libx11-6 libegl1 libgl1 libharfbuzz0b
+          sudo apt -y update
+          sudo apt -y install libfuse2 xvfb libthai-dev libfribidi0 libfontconfig1 libx11-6 libegl1 libgl1 libharfbuzz0b
 
           source $VENV_DIR/bin/activate
           eval $CREATE_PROJECT
