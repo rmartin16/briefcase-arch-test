@@ -18,7 +18,7 @@ env:
   FORCE_COLOR: 1
   APP_NAME: Verify App
   APP_DIR: verifyapp
-  GUI_INPUT: 6
+  GUI_INPUT: 8
   VENV_DIR: /runner/work/briefcase-arch-test/briefcase-arch-test/venv
   SETUP_VENV: >
     rm -rf "$VENV_DIR" && python3 -m venv "$VENV_DIR" && source "$VENV_DIR/bin/activate" &&
