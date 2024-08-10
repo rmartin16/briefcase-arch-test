@@ -18,7 +18,7 @@ env:
   FORCE_COLOR: 1
   APP_NAME: Verify App
   APP_DIR: verifyapp
-  GUI_INPUT: 8
+  GUI_INPUT: Toga Automation
   VENV_DIR: /runner/work/briefcase-arch-test/briefcase-arch-test/venv
   SETUP_VENV: >
     rm -rf "$VENV_DIR" && python3 -m venv "$VENV_DIR" && source "$VENV_DIR/bin/activate" &&
@@ -27,8 +27,10 @@ env:
     python -m pip -q install --upgrade --upgrade-strategy eager
       git+https://github.com/beeware/briefcase
       git+https://github.com/beeware/briefcase#subdirectory=automation
-  PRINT_INPUTS: printf "%s\n%s\n\n\n\n\n\n\n\n%s\n" "$APP_NAME" "$APP_DIR" "$GUI_INPUT"
-  CREATE_PROJECT: rm -rf "$APP_DIR" && eval $PRINT_INPUTS | briefcase new && cd "$APP_DIR"
+  CREATE_PROJECT: >
+    rm -rf "$APP_DIR" &&
+    briefcase new --no-input -Q "formal_name=$APP_NAME" -Q "app_name=$APP_DIR" -Q "bootstrap=$GUI_INPUT" &&
+    cd "$APP_DIR"
   SUPPORT_PACKAGE_LOC: https://github.com/rmartin16/python-standalone-releases/releases/download/continuous
 
 jobs:
@@ -65,7 +67,6 @@ jobs:
             GUI_INPUT: ${{ env.GUI_INPUT }}
             VENV_DIR: ${{ env.VENV_DIR }}
             SETUP_VENV: ${{ env.SETUP_VENV }}
-            PRINT_INPUTS: ${{ env.PRINT_INPUTS }}
             CREATE_PROJECT: ${{ env.CREATE_PROJECT }}
           install: |
             apt -y update
@@ -100,7 +101,6 @@ jobs:
             GUI_INPUT: ${{ env.GUI_INPUT }}
             VENV_DIR: ${{ env.VENV_DIR }}
             SETUP_VENV: ${{ env.SETUP_VENV }}
-            PRINT_INPUTS: ${{ env.PRINT_INPUTS }}
             CREATE_PROJECT: ${{ env.CREATE_PROJECT }}
             SUPPORT_PACKAGE_URL: ${{ env.SUPPORT_PACKAGE_LOC }}/cpython-3.9-${{ matrix.support-package-abi }}-noopt.tar.gz
           install: |
@@ -135,7 +135,6 @@ jobs:
             GUI_INPUT: ${{ env.GUI_INPUT }}
             VENV_DIR: ${{ env.VENV_DIR }}
             SETUP_VENV: ${{ env.SETUP_VENV }}
-            PRINT_INPUTS: ${{ env.PRINT_INPUTS }}
             CREATE_PROJECT: ${{ env.CREATE_PROJECT }}
           install: |
             apt -y update
