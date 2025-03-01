@@ -53,7 +53,7 @@ jobs:
     steps:
 
       - name: Build Linux System (${{ matrix.arch }})
-        uses: uraimo/run-on-arch-action@v2
+        uses: uraimo/run-on-arch-action@v3
         with:
           arch: ${{ matrix.arch }}
           distro: bullseye
@@ -87,7 +87,7 @@ jobs:
 
       - name: Build AppImage (${{ matrix.arch }})
         if: matrix.arch != 'armv6'
-        uses: uraimo/run-on-arch-action@v2
+        uses: uraimo/run-on-arch-action@v3
         with:
           arch: ${{ matrix.arch }}
           distro: bullseye
@@ -121,7 +121,7 @@ jobs:
             briefcase package linux appimage --no-docker --config "support_package=\"${SUPPORT_PACKAGE_URL}\""
 
       - name: Build Web Static (${{ matrix.arch }})
-        uses: uraimo/run-on-arch-action@v2
+        uses: uraimo/run-on-arch-action@v3
         with:
           arch: ${{ matrix.arch }}
           distro: bullseye
