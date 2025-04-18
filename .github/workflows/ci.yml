@@ -56,7 +56,7 @@ jobs:
         uses: uraimo/run-on-arch-action@v3
         with:
           arch: ${{ matrix.arch }}
-          distro: bullseye
+          distro: bookworm
           githubToken: ${{ github.token }}
           shell: /bin/bash
           env: |
@@ -90,7 +90,7 @@ jobs:
         uses: uraimo/run-on-arch-action@v3
         with:
           arch: ${{ matrix.arch }}
-          distro: bullseye
+          distro: bookworm
           githubToken: ${{ github.token }}
           shell: /bin/bash
           env: |
@@ -124,7 +124,7 @@ jobs:
         uses: uraimo/run-on-arch-action@v3
         with:
           arch: ${{ matrix.arch }}
-          distro: bullseye
+          distro: bookworm
           githubToken: ${{ github.token }}
           shell: /bin/bash
           env: |
